@@ -43,20 +43,13 @@ jobs:
             git fetch origin
             git reset --hard origin/main
 
-            # Update .env.local with secrets
-            cat > .env.local << ENVEOF
+            # Update .env with secrets for Docker
+            cat > .env << ENVEOF
             RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
             CONTACT_EMAIL=hello@goldenglowitsolutions.com
             FROM_EMAIL=contact@goldenglowitsolutions.com
             ENVEOF
 
-            # Clean up any stale locks and build artifacts
-            rm -rf .next/lock
-
-            # Install dependencies and build
-            npm install
-            npm run build
-
-            # Start/restart PM2 app
-            pm2 restart $APP_NAME || pm2 start ecosystem.config.js
-            pm2 save
+            # Build and deploy with Docker
+            docker-compose build
+            docker-compose up -d
