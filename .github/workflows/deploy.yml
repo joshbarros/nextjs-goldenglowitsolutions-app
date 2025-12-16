@@ -1,0 +1,62 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-goldenglowitsolutions
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+
+            # Source NVM for npm/pm2
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+            APP_DIR="/home/deployer/websites/goldenglowitsolutions"
+            APP_NAME="site-b"
+
+            # Clone or pull latest code
+            if [ ! -d "$APP_DIR" ]; then
+              cd /home/deployer/websites
+              git clone https://github.com/joshbarros/nextjs-goldenglowitsolutions-app.git goldenglowitsolutions
+            fi
+
+            cd $APP_DIR
+            git fetch origin
+            git reset --hard origin/main
+
+            # Update .env.local with secrets
+            cat > .env.local << ENVEOF
+            RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
+            CONTACT_EMAIL=hello@goldenglowitsolutions.com
+            FROM_EMAIL=contact@goldenglowitsolutions.com
+            ENVEOF
+
+            # Clean up any stale locks and build artifacts
+            rm -rf .next/lock
+
+            # Install dependencies and build
+            npm install
+            npm run build
+
+            # Start/restart PM2 app
+            pm2 restart $APP_NAME || pm2 start ecosystem.config.js
+            pm2 save
