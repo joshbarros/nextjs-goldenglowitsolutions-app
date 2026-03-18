@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
-// Initialize Resend with API key from environment variable
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// Email recipient - set in environment variable
-const TO_EMAIL = process.env.CONTACT_EMAIL || "hello@goldenglowitsolutions.com";
-const FROM_EMAIL = process.env.FROM_EMAIL || "contact@goldenglowitsolutions.com";
+// Initialize Resend - handle missing API key during build
+const getResendClient = () => {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    // If we're in build mode, we don't want to throw an error
+    if (process.env.NODE_ENV === "production") {
+      return null;
+    }
+  }
+  return new Resend(apiKey || "dummy_key");
+};
 
 interface ContactFormData {
   name: string;
@@ -17,6 +22,19 @@ interface ContactFormData {
 
 export async function POST(request: Request) {
   try {
+    const resend = getResendClient();
+    if (!resend) {
+      console.error("Resend API key is missing");
+      return NextResponse.json(
+        { error: "Email service not configured" },
+        { status: 500 }
+      );
+    }
+
+    // Email recipient - set in environment variable
+    const TO_EMAIL = process.env.CONTACT_EMAIL || "hello@goldenglowitsolutions.com";
+    const FROM_EMAIL = process.env.FROM_EMAIL || "contact@goldenglowitsolutions.com";
+
     const body: ContactFormData = await request.json();
     const { name, email, company, message } = body;
 
